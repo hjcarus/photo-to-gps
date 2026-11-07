@@ -19,8 +19,8 @@
     --muted:#64748b;
     --brand:#4472c4;
     --brand-ink:#ffffff;
-    --accent:#ed7d31;
-    --accent-ink:#ffffff;
+    --accent:#38bdf8;
+    --accent-ink:#06324a;
     --shadow:0 1px 2px rgba(16,24,40,.06), 0 8px 24px rgba(16,24,40,.07);
     --radius:14px;
   }
@@ -33,7 +33,7 @@
       --text:#e8eef7;
       --muted:#94a3b8;
       --brand:#5b87d6;
-      --accent:#f08a43;
+      --accent:#38bdf8;
       --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px rgba(0,0,0,.35);
     }
   }
@@ -45,7 +45,7 @@
     --text:#e8eef7;
     --muted:#94a3b8;
     --brand:#5b87d6;
-    --accent:#f08a43;
+    --accent:#38bdf8;
     --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px rgba(0,0,0,.35);
   }
 
@@ -599,15 +599,17 @@ function buildMaps(engine){
   state.engine = engine;
   const make = engine === 'google' ? makeGoogleMap : makeLeafletMap;
 
-  // 사진 위치 지도
+  // 사진 위치 지도 — API 키가 있으면 구글지도, 없으면 OSM
   const pmEl = $('photoMap');
   pmEl.innerHTML = '';
   photoMap = make(pmEl, { center:[36.5, 127.9], zoom:6, satellite:false });
 
-  // 위성 지도 (클릭)
+  // 위성 지도 (클릭) — 항상 Esri World Imagery를 쓴다.
+  // 국내는 구글 위성영상이 줌 15까지만 제공되어, 그 이상 확대하면 영상이 사라지고
+  // 바탕 도로지도만 남는다. Esri는 국내도 최대 배율까지 영상이 있다.
   const smEl = $('satMap');
   smEl.innerHTML = '';
-  satMap = make(smEl, {
+  satMap = makeLeafletMap(smEl, {
     center:[36.5, 127.9], zoom:6, satellite:true,
     onClick:(lat,lng)=>{
       setCoords('click', lat, lng);
@@ -626,14 +628,15 @@ function buildMaps(engine){
 
   const badge = $('engineBadge');
   if(engine === 'google'){
-    badge.textContent = '구글지도 사용 중';
+    badge.textContent = '구글지도 + Esri 위성';
     badge.classList.add('live');
-    $('satHint').textContent = '구글 위성지도입니다. 클릭한 지점의 위도·경도가 아래에 표시됩니다.';
   } else {
     badge.textContent = '대체 지도 사용 중 (API 키 없음)';
     badge.classList.remove('live');
-    $('satHint').textContent = '위성 영상(Esri) 지도입니다. 클릭한 지점의 위도·경도가 아래에 표시됩니다. 상단에 Google Maps API 키를 넣으면 구글지도로 바뀝니다.';
   }
+  $('satHint').textContent =
+    '위성 영상은 Esri World Imagery입니다. 국내도 최대 배율까지 확대됩니다. '
+    + '클릭한 지점의 위도·경도가 아래에 표시됩니다.';
 }
 
 function showPhotoOnMaps(lat, lng){
@@ -642,7 +645,7 @@ function showPhotoOnMaps(lat, lng){
   photoMap.focus(lat, lng, 16);
   photoMap.resize();
   satMap.setMarker(lat, lng, '사진 촬영 위치');
-  satMap.focus(lat, lng, 17);
+  satMap.focus(lat, lng, 18);
   satMap.resize();
 }
 
