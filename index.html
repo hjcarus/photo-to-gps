@@ -1,0 +1,826 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>사진 GPS 위치 확인</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
+
+<style>
+  :root{
+    --bg:#f1f4f9;
+    --surface:#ffffff;
+    --surface-2:#f7f9fc;
+    --border:#d8dfea;
+    --text:#1b2430;
+    --muted:#64748b;
+    --brand:#4472c4;
+    --brand-ink:#ffffff;
+    --accent:#ed7d31;
+    --accent-ink:#ffffff;
+    --shadow:0 1px 2px rgba(16,24,40,.06), 0 8px 24px rgba(16,24,40,.07);
+    --radius:14px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0e1520;
+      --surface:#16202e;
+      --surface-2:#1c2838;
+      --border:#2a3850;
+      --text:#e8eef7;
+      --muted:#94a3b8;
+      --brand:#5b87d6;
+      --accent:#f08a43;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0e1520;
+    --surface:#16202e;
+    --surface-2:#1c2838;
+    --border:#2a3850;
+    --text:#e8eef7;
+    --muted:#94a3b8;
+    --brand:#5b87d6;
+    --accent:#f08a43;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic","Segoe UI",system-ui,-apple-system,sans-serif;
+    font-size:15px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1500px;margin:0 auto;padding:20px 16px 48px}
+
+  /* ---------- header ---------- */
+  header.top{
+    display:flex;flex-wrap:wrap;align-items:center;gap:12px;
+    margin-bottom:18px;
+  }
+  header.top h1{
+    font-size:20px;margin:0;font-weight:700;letter-spacing:-.01em;
+    display:flex;align-items:center;gap:9px;
+  }
+  header.top h1 .pin{
+    width:26px;height:26px;border-radius:8px;background:var(--brand);
+    display:grid;place-items:center;color:#fff;font-size:14px;
+  }
+  .spacer{flex:1 1 auto}
+
+  .keybox{
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:999px;padding:6px 6px 6px 14px;box-shadow:var(--shadow);
+  }
+  .keybox label{font-size:12.5px;color:var(--muted);white-space:nowrap}
+  .keybox input{
+    border:0;background:transparent;color:var(--text);
+    font:inherit;font-size:13px;width:230px;outline:none;
+  }
+  .keybox input::placeholder{color:var(--muted)}
+
+  button{font:inherit;cursor:pointer}
+  .btn{
+    border:1px solid var(--border);background:var(--surface-2);color:var(--text);
+    border-radius:999px;padding:7px 14px;font-size:13px;font-weight:600;
+    transition:filter .15s, background .15s;
+  }
+  .btn:hover{filter:brightness(.97)}
+  .btn-brand{background:var(--brand);border-color:transparent;color:#fff}
+  .btn-accent{background:var(--accent);border-color:transparent;color:var(--accent-ink)}
+  .btn-ghost{background:transparent}
+
+  /* ---------- layout ---------- */
+  .grid{
+    display:grid;
+    grid-template-columns:minmax(360px,460px) minmax(0,1fr);
+    gap:18px;
+    align-items:start;
+  }
+  @media (max-width:960px){ .grid{grid-template-columns:1fr} }
+
+  .col{display:flex;flex-direction:column;gap:16px;min-width:0}
+
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    overflow:hidden;
+  }
+  .card-head{
+    display:flex;align-items:center;gap:10px;
+    padding:12px 14px;border-bottom:1px solid var(--border);
+    background:var(--surface-2);
+  }
+  .card-head h2{margin:0;font-size:14px;font-weight:700;letter-spacing:-.01em}
+  .card-head .sub{font-size:12px;color:var(--muted);font-weight:500}
+  .card-body{padding:14px}
+
+  /* ---------- dropzone ---------- */
+  #dropzone{
+    position:relative;
+    border:2px dashed var(--border);
+    border-radius:12px;
+    background:var(--surface-2);
+    min-height:240px;
+    display:grid;place-items:center;
+    text-align:center;padding:20px;
+    transition:border-color .15s, background .15s;
+    cursor:pointer;
+  }
+  #dropzone.hasimg{padding:0;border-style:solid;background:#0b0f16}
+  #dropzone:hover{border-color:var(--brand)}
+  #dropzone .dz-inner{display:grid;gap:12px;justify-items:center}
+  #dropzone .dz-icon{
+    width:46px;height:46px;border-radius:12px;background:var(--brand);
+    color:#fff;display:grid;place-items:center;font-size:22px;
+  }
+  #dropzone .dz-title{font-weight:700;font-size:15px}
+  #dropzone .dz-desc{font-size:12.5px;color:var(--muted);max-width:280px}
+  #preview{display:none;width:100%;max-height:420px;object-fit:contain;border-radius:10px}
+  #dropzone.hasimg #preview{display:block}
+  #dropzone.hasimg .dz-inner{display:none}
+
+  .file-meta{
+    display:none;margin-top:10px;font-size:12px;color:var(--muted);
+    word-break:break-all;
+  }
+  .file-meta.show{display:block}
+
+  .upload-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+
+  /* full-window drag overlay */
+  #dragveil{
+    position:fixed;inset:0;z-index:9999;display:none;
+    background:rgba(68,114,196,.18);backdrop-filter:blur(2px);
+    align-items:center;justify-content:center;
+    pointer-events:none;
+  }
+  #dragveil.on{display:flex}
+  #dragveil .veil-card{
+    background:var(--surface);border:2px dashed var(--brand);border-radius:18px;
+    padding:28px 40px;font-size:18px;font-weight:700;box-shadow:var(--shadow);
+  }
+
+  /* ---------- coordinate fields ---------- */
+  .coords{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media (max-width:420px){ .coords{grid-template-columns:1fr} }
+
+  .coord{
+    display:flex;align-items:stretch;
+    border:1px solid var(--border);border-radius:10px;overflow:hidden;
+    background:var(--surface);
+  }
+  .coord .body{flex:1 1 auto;padding:8px 10px;min-width:0}
+  .coord .lbl{font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.02em}
+  .coord .val{
+    font-size:16px;font-weight:700;letter-spacing:-.01em;
+    font-variant-numeric:tabular-nums;
+    font-family:ui-monospace,"SFMono-Regular","Consolas",monospace;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .coord .val.empty{color:var(--muted);font-weight:500}
+  .coord .copy{
+    flex:0 0 auto;width:54px;border:0;border-left:1px solid var(--border);
+    background:var(--accent);color:var(--accent-ink);
+    font-size:12px;font-weight:700;line-height:1.15;
+    display:grid;place-items:center;
+    transition:filter .15s;
+  }
+  .coord .copy:hover{filter:brightness(1.07)}
+  .coord .copy:disabled{background:var(--surface-2);color:var(--muted);cursor:not-allowed;filter:none}
+  .coord .copy.done{background:#2e9e5b}
+
+  .pair-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}
+  .dms{
+    margin-top:10px;font-size:12.5px;color:var(--muted);
+    font-family:ui-monospace,"SFMono-Regular","Consolas",monospace;
+    word-break:break-all;
+  }
+
+  /* ---------- maps ---------- */
+  .mapbox{width:100%;background:var(--surface-2)}
+  #photoMap{height:340px}
+  #satMap{height:620px}
+  @media (max-width:960px){ #satMap{height:420px} }
+  .map-empty{
+    height:100%;display:grid;place-items:center;text-align:center;
+    color:var(--muted);font-size:13px;padding:20px;
+  }
+  .leaflet-container{background:#1b2430}
+
+  .hint{
+    padding:9px 14px;font-size:12.5px;color:var(--muted);
+    border-top:1px solid var(--border);background:var(--surface-2);
+  }
+  .badge{
+    display:inline-flex;align-items:center;gap:5px;
+    font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;
+    background:var(--surface);border:1px solid var(--border);color:var(--muted);
+  }
+  .badge.live{color:#2e9e5b;border-color:rgba(46,158,91,.35)}
+
+  #toast{
+    position:fixed;left:50%;bottom:28px;transform:translate(-50%,16px);
+    background:#1b2430;color:#fff;border-radius:999px;padding:10px 20px;
+    font-size:13.5px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.3);
+    opacity:0;pointer-events:none;transition:opacity .2s, transform .2s;z-index:10000;
+  }
+  #toast.on{opacity:1;transform:translate(-50%,0)}
+
+  .err{
+    display:none;margin-top:10px;padding:10px 12px;border-radius:10px;
+    background:rgba(237,125,49,.12);border:1px solid rgba(237,125,49,.4);
+    color:var(--text);font-size:13px;
+  }
+  .err.show{display:block}
+</style>
+</head>
+<body>
+
+<div id="dragveil"><div class="veil-card">여기에 사진을 놓으세요</div></div>
+<div id="toast"></div>
+
+<div class="wrap">
+
+  <header class="top">
+    <h1><span class="pin">📍</span>사진 GPS 위치 확인</h1>
+    <div class="spacer"></div>
+    <div class="keybox">
+      <label for="gkey">Google Maps API 키</label>
+      <input id="gkey" type="text" placeholder="키를 넣으면 구글지도로 전환" autocomplete="off" spellcheck="false">
+      <button class="btn btn-brand" id="applyKey">적용</button>
+    </div>
+    <span class="badge" id="engineBadge">지도 엔진 확인 중…</span>
+  </header>
+
+  <div class="grid">
+
+    <!-- ============ LEFT ============ -->
+    <div class="col">
+
+      <!-- photo -->
+      <section class="card">
+        <div class="card-head">
+          <h2>사진</h2>
+          <span class="sub">드래그 앤 드롭 · 붙여넣기 지원</span>
+        </div>
+        <div class="card-body">
+          <div id="dropzone">
+            <img id="preview" alt="업로드한 사진 미리보기">
+            <div class="dz-inner">
+              <div class="dz-icon">⬆</div>
+              <div class="dz-title">사진을 끌어다 놓으세요</div>
+              <div class="dz-desc">바탕화면에서 이 화면 아무 곳에나 끌어다 놓으면 자동으로 업로드됩니다. 또는 아래 버튼으로 선택하세요.</div>
+            </div>
+          </div>
+          <div class="upload-row">
+            <button class="btn btn-accent" id="uploadBtn">업로드 버튼</button>
+            <button class="btn btn-ghost" id="clearBtn">지우기</button>
+          </div>
+          <div class="file-meta" id="fileMeta"></div>
+          <div class="err" id="gpsErr"></div>
+          <input type="file" id="fileInput" accept="image/*" hidden>
+        </div>
+      </section>
+
+      <!-- photo coords -->
+      <section class="card">
+        <div class="card-head">
+          <h2>사진의 위도 · 경도</h2>
+          <span class="sub">도분초 → 십진수 변환</span>
+        </div>
+        <div class="card-body">
+          <div class="coords">
+            <div class="coord">
+              <div class="body">
+                <div class="lbl">위도 (Latitude)</div>
+                <div class="val empty" id="photoLat">—</div>
+              </div>
+              <button class="copy" data-copy="photoLat" disabled>복<br>사</button>
+            </div>
+            <div class="coord">
+              <div class="body">
+                <div class="lbl">경도 (Longitude)</div>
+                <div class="val empty" id="photoLng">—</div>
+              </div>
+              <button class="copy" data-copy="photoLng" disabled>복<br>사</button>
+            </div>
+          </div>
+          <div class="pair-actions">
+            <button class="btn" id="copyPhotoPair" disabled>위도, 경도 함께 복사</button>
+            <a class="btn" id="openGmaps" href="#" target="_blank" rel="noopener" style="display:none;text-decoration:none">구글지도에서 열기 ↗</a>
+          </div>
+          <div class="dms" id="photoDms"></div>
+        </div>
+      </section>
+
+      <!-- photo map -->
+      <section class="card">
+        <div class="card-head"><h2>업로드한 사진의 위치</h2></div>
+        <div class="mapbox" id="photoMap">
+          <div class="map-empty" id="photoMapEmpty">사진을 업로드하면 이곳에 위치가 표시됩니다.</div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ============ RIGHT ============ -->
+    <div class="col">
+
+      <section class="card">
+        <div class="card-head">
+          <h2>위성지도</h2>
+          <span class="sub">지도를 클릭하면 그 지점의 위도·경도가 표시됩니다</span>
+        </div>
+        <div class="mapbox" id="satMap"></div>
+        <div class="hint" id="satHint">지도를 클릭해 보세요. 클릭한 지점에 핀이 찍히고 좌표가 아래에 표시됩니다.</div>
+        <div class="card-body">
+          <div class="coords">
+            <div class="coord">
+              <div class="body">
+                <div class="lbl">클릭한 지점 · 위도</div>
+                <div class="val empty" id="clickLat">—</div>
+              </div>
+              <button class="copy" data-copy="clickLat" disabled>복<br>사</button>
+            </div>
+            <div class="coord">
+              <div class="body">
+                <div class="lbl">클릭한 지점 · 경도</div>
+                <div class="val empty" id="clickLng">—</div>
+              </div>
+              <button class="copy" data-copy="clickLng" disabled>복<br>사</button>
+            </div>
+          </div>
+          <div class="pair-actions">
+            <button class="btn" id="copyClickPair" disabled>위도, 경도 함께 복사</button>
+            <button class="btn btn-ghost" id="gotoPhoto" disabled>사진 위치로 이동</button>
+          </div>
+          <div class="dms" id="clickDms"></div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   상태
+   ========================================================= */
+const state = {
+  photo:  { lat:null, lng:null },
+  click:  { lat:null, lng:null },
+  engine: null            // 'google' | 'leaflet'
+};
+
+const $ = (id) => document.getElementById(id);
+
+/* =========================================================
+   토스트 / 클립보드
+   ========================================================= */
+let toastTimer = null;
+function toast(msg){
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('on'), 1800);
+}
+
+async function copyText(text){
+  try{
+    if (navigator.clipboard && window.isSecureContext){
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  }catch(e){ /* fall through */ }
+  // file:// 등 비보안 컨텍스트 대비 폴백
+  try{
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  }catch(e){ return false; }
+}
+
+document.addEventListener('click', async (ev)=>{
+  const btn = ev.target.closest('button.copy');
+  if(!btn || btn.disabled) return;
+  const val = $(btn.dataset.copy).textContent.trim();
+  if(!val || val === '—') return;
+  const ok = await copyText(val);
+  if(ok){
+    btn.classList.add('done');
+    btn.innerHTML = '✓';
+    setTimeout(()=>{ btn.classList.remove('done'); btn.innerHTML = '복<br>사'; }, 1100);
+    toast('복사됨: ' + val);
+  } else {
+    toast('복사에 실패했습니다. 값을 직접 선택해 복사해 주세요.');
+  }
+});
+
+async function copyPair(kind){
+  const s = state[kind];
+  if(s.lat === null) return;
+  const text = `${fmt(s.lat)}, ${fmt(s.lng)}`;
+  const ok = await copyText(text);
+  toast(ok ? ('복사됨: ' + text) : '복사에 실패했습니다.');
+}
+$('copyPhotoPair').addEventListener('click', ()=>copyPair('photo'));
+$('copyClickPair').addEventListener('click', ()=>copyPair('click'));
+
+/* =========================================================
+   좌표 포맷 / 변환
+   ========================================================= */
+const fmt = (n) => Number(n).toFixed(6);
+
+function toDms(dec, isLat){
+  const ref = isLat ? (dec >= 0 ? 'N' : 'S') : (dec >= 0 ? 'E' : 'W');
+  const abs = Math.abs(dec);
+  const d = Math.floor(abs);
+  const mFloat = (abs - d) * 60;
+  const m = Math.floor(mFloat);
+  const s = (mFloat - m) * 60;
+  return `${d}° ${String(m).padStart(2,'0')}' ${s.toFixed(2).padStart(5,'0')}" ${ref}`;
+}
+
+// EXIF의 [도, 분, 초] 배열 + 기준(N/S/E/W) → 십진수
+function dmsArrayToDecimal(arr, ref){
+  if(!Array.isArray(arr)) return null;
+  const d = Number(arr[0]) || 0;
+  const m = Number(arr[1]) || 0;
+  const s = Number(arr[2]) || 0;
+  let dec = d + m/60 + s/3600;
+  if(ref === 'S' || ref === 'W' || ref === 's' || ref === 'w') dec = -dec;
+  return dec;
+}
+
+/* =========================================================
+   좌표 UI 반영
+   ========================================================= */
+function setCoords(kind, lat, lng){
+  const latEl = kind === 'photo' ? $('photoLat') : $('clickLat');
+  const lngEl = kind === 'photo' ? $('photoLng') : $('clickLng');
+  const dmsEl = kind === 'photo' ? $('photoDms') : $('clickDms');
+  const pairBtn = kind === 'photo' ? $('copyPhotoPair') : $('copyClickPair');
+  const btns = document.querySelectorAll(
+    kind === 'photo' ? '[data-copy="photoLat"],[data-copy="photoLng"]'
+                     : '[data-copy="clickLat"],[data-copy="clickLng"]');
+
+  if(lat === null || lat === undefined){
+    state[kind] = { lat:null, lng:null };
+    latEl.textContent = '—'; latEl.classList.add('empty');
+    lngEl.textContent = '—'; lngEl.classList.add('empty');
+    dmsEl.textContent = '';
+    btns.forEach(b=>b.disabled = true);
+    pairBtn.disabled = true;
+    if(kind === 'photo'){
+      $('openGmaps').style.display = 'none';
+      $('gotoPhoto').disabled = true;
+    }
+    return;
+  }
+
+  state[kind] = { lat, lng };
+  latEl.textContent = fmt(lat); latEl.classList.remove('empty');
+  lngEl.textContent = fmt(lng); lngEl.classList.remove('empty');
+  dmsEl.textContent = `도분초: ${toDms(lat, true)} , ${toDms(lng, false)}`;
+  btns.forEach(b=>b.disabled = false);
+  pairBtn.disabled = false;
+
+  if(kind === 'photo'){
+    const a = $('openGmaps');
+    a.href = `https://www.google.com/maps?q=${fmt(lat)},${fmt(lng)}`;
+    a.style.display = '';
+    $('gotoPhoto').disabled = false;
+  }
+}
+
+/* =========================================================
+   지도 엔진 추상화
+   ========================================================= */
+let googleReady = null;
+
+function loadGoogleMaps(key){
+  if(googleReady) return googleReady;
+  googleReady = new Promise((resolve, reject)=>{
+    const timer = setTimeout(()=>reject(new Error('timeout')), 12000);
+    window.__gmapsReady = ()=>{ clearTimeout(timer); resolve(window.google); };
+    window.gm_authFailure = ()=>{ clearTimeout(timer); reject(new Error('auth')); };
+    const s = document.createElement('script');
+    s.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(key) +
+            '&v=weekly&language=ko&region=KR&callback=__gmapsReady';
+    s.async = true;
+    s.onerror = ()=>{ clearTimeout(timer); reject(new Error('network')); };
+    document.head.appendChild(s);
+  });
+  return googleReady;
+}
+
+/* --- Google 구현 --- */
+function makeGoogleMap(el, opts){
+  const map = new google.maps.Map(el, {
+    center: { lat: opts.center[0], lng: opts.center[1] },
+    zoom: opts.zoom,
+    mapTypeId: opts.satellite ? 'hybrid' : 'roadmap',
+    streetViewControl: false,
+    mapTypeControl: true,
+    fullscreenControl: true,
+    gestureHandling: 'greedy'
+  });
+  let marker = null;
+  if(opts.onClick){
+    map.addListener('click', (e)=>opts.onClick(e.latLng.lat(), e.latLng.lng()));
+  }
+  return {
+    setMarker(lat, lng, title){
+      if(!marker){
+        marker = new google.maps.Marker({ map, position:{lat,lng}, title });
+      } else {
+        marker.setPosition({lat,lng});
+      }
+    },
+    clearMarker(){ if(marker){ marker.setMap(null); marker = null; } },
+    focus(lat, lng, zoom){ map.setCenter({lat,lng}); if(zoom) map.setZoom(zoom); },
+    resize(){ google.maps.event.trigger(map, 'resize'); }
+  };
+}
+
+/* --- Leaflet 구현 (API 키 없이 동작) --- */
+function makeLeafletMap(el, opts){
+  const map = L.map(el, { center: opts.center, zoom: opts.zoom, zoomControl:true });
+
+  const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '&copy; OpenStreetMap'
+  });
+  const sat = L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19, attribution: 'Tiles &copy; Esri, Maxar, Earthstar Geographics'
+    });
+  if(opts.satellite){ sat.addTo(map); } else { osm.addTo(map); }
+  L.control.layers({ '위성': sat, '일반지도': osm }, {}, { position:'topright' }).addTo(map);
+
+  if(opts.onClick){
+    map.on('click', (e)=>opts.onClick(e.latlng.lat, e.latlng.lng));
+  }
+
+  let marker = null;
+  return {
+    setMarker(lat, lng, title){
+      if(!marker){ marker = L.marker([lat,lng], { title }).addTo(map); }
+      else { marker.setLatLng([lat,lng]); }
+    },
+    clearMarker(){ if(marker){ map.removeLayer(marker); marker = null; } },
+    focus(lat, lng, zoom){ map.setView([lat,lng], zoom || map.getZoom()); },
+    resize(){ setTimeout(()=>map.invalidateSize(), 50); }
+  };
+}
+
+/* --- 공용 생성기 --- */
+let photoMap = null, satMap = null;
+
+function buildMaps(engine){
+  state.engine = engine;
+  const make = engine === 'google' ? makeGoogleMap : makeLeafletMap;
+
+  // 사진 위치 지도
+  const pmEl = $('photoMap');
+  pmEl.innerHTML = '';
+  photoMap = make(pmEl, { center:[36.5, 127.9], zoom:6, satellite:false });
+
+  // 위성 지도 (클릭)
+  const smEl = $('satMap');
+  smEl.innerHTML = '';
+  satMap = make(smEl, {
+    center:[36.5, 127.9], zoom:6, satellite:true,
+    onClick:(lat,lng)=>{
+      setCoords('click', lat, lng);
+      satMap.setMarker(lat, lng, '클릭한 지점');
+    }
+  });
+
+  // 이미 사진 좌표가 있으면 다시 반영
+  if(state.photo.lat !== null){
+    showPhotoOnMaps(state.photo.lat, state.photo.lng);
+  }
+  if(state.click.lat !== null){
+    satMap.setMarker(state.click.lat, state.click.lng, '클릭한 지점');
+    satMap.focus(state.click.lat, state.click.lng);
+  }
+
+  const badge = $('engineBadge');
+  if(engine === 'google'){
+    badge.textContent = '구글지도 사용 중';
+    badge.classList.add('live');
+    $('satHint').textContent = '구글 위성지도입니다. 클릭한 지점의 위도·경도가 아래에 표시됩니다.';
+  } else {
+    badge.textContent = '대체 지도 사용 중 (API 키 없음)';
+    badge.classList.remove('live');
+    $('satHint').textContent = '위성 영상(Esri) 지도입니다. 클릭한 지점의 위도·경도가 아래에 표시됩니다. 상단에 Google Maps API 키를 넣으면 구글지도로 바뀝니다.';
+  }
+}
+
+function showPhotoOnMaps(lat, lng){
+  $('photoMapEmpty')?.remove();
+  photoMap.setMarker(lat, lng, '사진 촬영 위치');
+  photoMap.focus(lat, lng, 16);
+  photoMap.resize();
+  satMap.setMarker(lat, lng, '사진 촬영 위치');
+  satMap.focus(lat, lng, 17);
+  satMap.resize();
+}
+
+/* --- 엔진 초기화 / 키 적용 --- */
+const KEY_STORE = 'gmaps_api_key';
+function savedKey(){
+  try{ return localStorage.getItem(KEY_STORE) || ''; }catch(e){ return ''; }
+}
+function saveKey(k){
+  try{ k ? localStorage.setItem(KEY_STORE, k) : localStorage.removeItem(KEY_STORE); }catch(e){}
+}
+
+async function initEngine(){
+  const key = savedKey();
+  $('gkey').value = key;
+  if(key){
+    $('engineBadge').textContent = '구글지도 불러오는 중…';
+    try{
+      await loadGoogleMaps(key);
+      buildMaps('google');
+      return;
+    }catch(err){
+      toast('구글지도를 불러오지 못했습니다 (' + err.message + '). 대체 지도로 표시합니다.');
+    }
+  }
+  buildMaps('leaflet');
+}
+
+$('applyKey').addEventListener('click', ()=>{
+  const k = $('gkey').value.trim();
+  saveKey(k);
+  if(window.google && window.google.maps){
+    // 이미 다른 키로 로드된 경우 재적용하려면 새로고침이 필요
+    location.reload();
+  } else {
+    googleReady = null;
+    initEngine();
+  }
+});
+$('gkey').addEventListener('keydown', (e)=>{ if(e.key === 'Enter') $('applyKey').click(); });
+
+$('gotoPhoto').addEventListener('click', ()=>{
+  if(state.photo.lat === null) return;
+  satMap.focus(state.photo.lat, state.photo.lng, 18);
+});
+
+/* =========================================================
+   사진 업로드 / EXIF 읽기
+   ========================================================= */
+function showErr(msg){
+  const e = $('gpsErr');
+  if(!msg){ e.classList.remove('show'); e.textContent = ''; return; }
+  e.textContent = msg;
+  e.classList.add('show');
+}
+
+let previewUrl = null;
+
+async function handleFile(file){
+  if(!file) return;
+  if(!/^image\//.test(file.type) && !/\.(jpe?g|png|tiff?|heic|heif|webp|avif)$/i.test(file.name)){
+    showErr('이미지 파일이 아닙니다: ' + file.name);
+    return;
+  }
+  showErr('');
+
+  // 미리보기
+  if(previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl = URL.createObjectURL(file);
+  const img = $('preview');
+  img.src = previewUrl;
+  $('dropzone').classList.add('hasimg');
+
+  const kb = file.size < 1024*1024
+    ? (file.size/1024).toFixed(0) + ' KB'
+    : (file.size/1024/1024).toFixed(2) + ' MB';
+  const meta = $('fileMeta');
+  meta.textContent = `${file.name} · ${kb}`;
+  meta.classList.add('show');
+
+  // EXIF
+  try{
+    const out = await exifr.parse(file, { gps:true, exif:true, ifd0:true, translateValues:false });
+
+    let lat = null, lng = null, dmsText = '';
+
+    if(out && Array.isArray(out.GPSLatitude) && Array.isArray(out.GPSLongitude)){
+      const latRef = out.GPSLatitudeRef  || (out.GPSLatitude[0]  < 0 ? 'S' : 'N');
+      const lngRef = out.GPSLongitudeRef || (out.GPSLongitude[0] < 0 ? 'W' : 'E');
+      lat = dmsArrayToDecimal(out.GPSLatitude,  latRef);
+      lng = dmsArrayToDecimal(out.GPSLongitude, lngRef);
+      const f = (a)=>`${Number(a[0])}° ${Number(a[1])}' ${Number(a[2]).toFixed(2)}"`;
+      dmsText = `사진 속성(도분초): ${f(out.GPSLatitude)} ${latRef} , ${f(out.GPSLongitude)} ${lngRef}`;
+    } else {
+      const g = await exifr.gps(file).catch(()=>null);
+      if(g && typeof g.latitude === 'number'){
+        lat = g.latitude; lng = g.longitude;
+      }
+    }
+
+    if(lat === null || !isFinite(lat) || !isFinite(lng)){
+      setCoords('photo', null);
+      showErr('이 사진에는 GPS 정보가 없습니다. 위치 기록이 켜진 상태에서 찍은 사진인지, 또는 메신저·SNS를 거치며 EXIF가 지워지지 않았는지 확인해 주세요.');
+      return;
+    }
+
+    setCoords('photo', lat, lng);
+    if(dmsText) $('photoDms').textContent = dmsText;
+    showPhotoOnMaps(lat, lng);
+
+    const when = out && (out.DateTimeOriginal || out.CreateDate);
+    if(when){
+      meta.textContent += ' · 촬영: ' + new Date(when).toLocaleString('ko-KR');
+    }
+  }catch(err){
+    setCoords('photo', null);
+    showErr('사진의 EXIF 정보를 읽지 못했습니다: ' + err.message);
+  }
+}
+
+/* --- 업로드 버튼 / 드롭존 --- */
+$('uploadBtn').addEventListener('click', ()=>$('fileInput').click());
+$('dropzone').addEventListener('click', ()=>$('fileInput').click());
+$('fileInput').addEventListener('change', (e)=>{
+  if(e.target.files && e.target.files[0]) handleFile(e.target.files[0]);
+  e.target.value = '';
+});
+
+$('clearBtn').addEventListener('click', ()=>{
+  if(previewUrl){ URL.revokeObjectURL(previewUrl); previewUrl = null; }
+  $('preview').removeAttribute('src');
+  $('dropzone').classList.remove('hasimg');
+  $('fileMeta').classList.remove('show');
+  $('fileMeta').textContent = '';
+  showErr('');
+  setCoords('photo', null);
+  photoMap && photoMap.clearMarker();
+  $('fileInput').value = '';
+});
+
+/* --- 화면 전체 드래그 앤 드롭 --- */
+let dragDepth = 0;
+const veil = $('dragveil');
+
+function hasFiles(e){
+  return e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+}
+window.addEventListener('dragenter', (e)=>{
+  if(!hasFiles(e)) return;
+  e.preventDefault(); dragDepth++; veil.classList.add('on');
+});
+window.addEventListener('dragover', (e)=>{
+  if(!hasFiles(e)) return;
+  e.preventDefault(); e.dataTransfer.dropEffect = 'copy';
+});
+window.addEventListener('dragleave', (e)=>{
+  if(!hasFiles(e)) return;
+  dragDepth = Math.max(0, dragDepth - 1);
+  if(dragDepth === 0) veil.classList.remove('on');
+});
+window.addEventListener('drop', (e)=>{
+  if(!hasFiles(e)) return;
+  e.preventDefault();
+  dragDepth = 0; veil.classList.remove('on');
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if(f) handleFile(f);
+});
+
+/* --- 붙여넣기(Ctrl+V) --- */
+window.addEventListener('paste', (e)=>{
+  const items = e.clipboardData && e.clipboardData.files;
+  if(items && items.length) handleFile(items[0]);
+});
+
+/* =========================================================
+   시작
+   ========================================================= */
+initEngine();
+</script>
+</body>
+</html>
