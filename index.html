@@ -205,6 +205,19 @@
   .coord .copy:disabled{background:var(--surface-2);color:var(--muted);cursor:not-allowed;filter:none}
   .coord .copy.done{background:#2e9e5b}
 
+  /* 직접 입력용 칸. 표시용 .val과 같은 크기·글꼴로 맞춰서,
+     읽는 칸과 쓰는 칸이 한 화면에서 따로 놀지 않게 한다. */
+  .coord .body label.lbl{display:block}
+  .coord .valin{
+    width:100%;border:0;padding:0;background:transparent;color:var(--text);
+    font:inherit;font-size:16px;font-weight:700;letter-spacing:-.01em;
+    font-variant-numeric:tabular-nums;
+    font-family:ui-monospace,"SFMono-Regular","Consolas",monospace;
+    outline:none;
+  }
+  .coord .valin::placeholder{color:var(--muted);font-weight:500}
+  .coord:focus-within{border-color:var(--brand)}
+
   .pair-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}
   .dms{
     margin-top:10px;font-size:12.5px;color:var(--muted);
@@ -372,6 +385,41 @@
                     title="GPS 정보가 있는 사진을 올리면 사용할 수 있습니다">사진 위치로 이동</button>
           </div>
           <div class="dms" id="clickDms"></div>
+        </div>
+      </section>
+
+      <!-- 좌표 직접 입력 -->
+      <section class="card">
+        <div class="card-head">
+          <h2>좌표 직접 입력</h2>
+          <span class="sub">사진 없이 위도·경도를 넣어 지도에 핀을 찍습니다</span>
+        </div>
+        <div class="card-body">
+          <div class="coords">
+            <div class="coord">
+              <div class="body">
+                <label class="lbl" for="inLat">위도 (Latitude)</label>
+                <input class="valin" id="inLat" type="text" inputmode="decimal"
+                       placeholder="37.690486" autocomplete="off" spellcheck="false">
+              </div>
+            </div>
+            <div class="coord">
+              <div class="body">
+                <label class="lbl" for="inLng">경도 (Longitude)</label>
+                <input class="valin" id="inLng" type="text" inputmode="decimal"
+                       placeholder="126.518861" autocomplete="off" spellcheck="false">
+              </div>
+            </div>
+          </div>
+          <div class="pair-actions">
+            <button class="btn btn-accent" id="applyCoords">지도에 핀 찍기</button>
+            <button class="btn btn-ghost" id="clearCoords">입력 지우기</button>
+          </div>
+          <div class="err" id="inErr"></div>
+          <div class="dms" id="inHelp">
+            십진수(37.690486)와 도분초(37° 41' 25.7" N) 모두 됩니다.
+            위도 칸에 «37.690486, 126.518861»처럼 둘을 함께 붙여넣어도 알아서 나눠 넣습니다.
+          </div>
         </div>
       </section>
 
@@ -709,6 +757,105 @@ $('gotoPhoto').addEventListener('click', ()=>{
   // 핀이 사진 위치로 옮겨졌으므로 아래 좌표도 그 자리를 가리켜야 한다.
   setCoords('click', state.photo.lat, state.photo.lng);
   toast('사진 위치로 이동했습니다');
+});
+
+/* =========================================================
+   좌표 직접 입력 — 사진 없이 위도·경도를 넣어 핀을 찍는다
+   ========================================================= */
+
+// 한 칸에 들어온 글자를 좌표 하나로 해석한다.
+// 받는 형태: 37.690486 / -37.69 / 37° 41' 25.7" N / 37 41 25.7 S / N 37 41 25.7
+function parseCoord(text){
+  if(text === null || text === undefined) return null;
+  let s = String(text).trim();
+  if(!s) return null;
+
+  // 방위 표시(N/S/E/W, 북남동서)는 떼어 내 부호로 바꾼다.
+  let sign = 1;
+  const ref = s.match(/[NSEWnsew북남동서]/);
+  if(ref){
+    const c = ref[0].toUpperCase();
+    if(c === 'S' || c === 'W' || c === '남' || c === '서') sign = -1;
+    s = s.replace(/[NSEWnsew북남동서]/g, ' ');
+  }
+
+  const nums = s.match(/-?\d+(?:\.\d+)?/g);
+  if(!nums || nums.length === 0 || nums.length > 3) return null;
+  // 숫자 말고 다른 글자가 섞여 있으면(도분초 기호·공백은 제외) 거부한다.
+  if(/[^\d.\-\s°'"′″:]/.test(s)) return null;
+
+  const v = nums.map(Number);
+  if(v.some(n=>!isFinite(n))) return null;
+  if(v[0] < 0){ sign = -sign; v[0] = Math.abs(v[0]); }
+  if(v.slice(1).some(n=>n < 0)) return null;
+
+  const dec = v[0] + (v[1] || 0)/60 + (v[2] || 0)/3600;
+  return sign * dec;
+}
+
+// "37.690486, 126.518861"처럼 두 값을 한 칸에 넣는 사람이 많아서, 구분자가 보이면 나눈다.
+function splitPair(text){
+  const t = String(text || '').trim();
+  if(!t) return null;
+  let parts = null;
+  if(/[,;/]/.test(t))                                   parts = t.split(/[,;/]/);
+  else if(/^-?\d+(\.\d+)?\s+-?\d+(\.\d+)?$/.test(t))    parts = t.split(/\s+/);
+  if(!parts) return null;
+  parts = parts.map(p=>p.trim()).filter(Boolean);
+  return parts.length === 2 ? parts : null;
+}
+
+function showInErr(msg){
+  const e = $('inErr');
+  if(!msg){ e.classList.remove('show'); e.textContent = ''; return; }
+  e.textContent = msg;
+  e.classList.add('show');
+}
+
+function applyTypedCoords(){
+  if(!satMap){ toast('지도를 불러오는 중입니다. 잠시 후 다시 눌러 주세요.'); return; }
+
+  let latText = $('inLat').value;
+  let lngText = $('inLng').value.trim();
+  if(!lngText){
+    const pair = splitPair(latText);
+    if(pair){ latText = pair[0]; lngText = pair[1]; }
+  }
+
+  const lat = parseCoord(latText);
+  const lng = parseCoord(lngText);
+  if(lat === null || lng === null){
+    showInErr('위도와 경도를 모두 넣어 주세요. 십진수(37.690486)나 도분초(37° 41\' 25.7" N) 모두 됩니다.');
+    return;
+  }
+  if(Math.abs(lat) > 90){
+    showInErr('위도는 -90 ~ 90 사이여야 합니다. 위도와 경도를 바꿔 넣지 않았는지 확인해 주세요.');
+    return;
+  }
+  if(Math.abs(lng) > 180){ showInErr('경도는 -180 ~ 180 사이여야 합니다.'); return; }
+  showInErr('');
+
+  // 해석한 값을 칸에 다시 써 준다. 도분초로 넣었을 때 십진수 결과를 바로 확인할 수 있다.
+  $('inLat').value = fmt(lat);
+  $('inLng').value = fmt(lng);
+
+  satMap.setMarker(lat, lng, '입력한 좌표');
+  satMap.focus(lat, lng, SAT_OPEN_ZOOM);
+  // 핀이 그 자리에 있으므로 위쪽 '클릭한 지점' 좌표도 같은 값을 가리키게 한다.
+  // 복사 버튼을 그대로 쓸 수 있다.
+  setCoords('click', lat, lng);
+  toast('입력한 좌표에 핀을 찍었습니다');
+}
+
+$('applyCoords').addEventListener('click', applyTypedCoords);
+['inLat','inLng'].forEach(id=>{
+  $(id).addEventListener('keydown', (e)=>{ if(e.key === 'Enter') applyTypedCoords(); });
+  $(id).addEventListener('input', ()=>showInErr(''));
+});
+$('clearCoords').addEventListener('click', ()=>{
+  $('inLat').value = ''; $('inLng').value = '';
+  showInErr('');
+  $('inLat').focus();
 });
 
 /* =========================================================
