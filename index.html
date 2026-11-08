@@ -95,6 +95,10 @@
     transition:filter .15s, background .15s;
   }
   .btn:hover{filter:brightness(.97)}
+  /* 사진을 올리기 전에는 좌표가 없어 비활성이다. 눌러도 반응이 없는 버튼이
+     멀쩡해 보이면 고장으로 오해하므로, 비활성 상태를 눈에 띄게 표시한다. */
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn:disabled:hover{filter:none}
   .btn-brand{background:var(--brand);border-color:transparent;color:#fff}
   .btn-accent{background:var(--accent);border-color:transparent;color:var(--accent-ink)}
   .btn-ghost{background:transparent}
@@ -364,7 +368,8 @@
           </div>
           <div class="pair-actions">
             <button class="btn" id="copyClickPair" disabled>위도, 경도 함께 복사</button>
-            <button class="btn btn-ghost" id="gotoPhoto" disabled>사진 위치로 이동</button>
+            <button class="btn btn-ghost" id="gotoPhoto" disabled
+                    title="GPS 정보가 있는 사진을 올리면 사용할 수 있습니다">사진 위치로 이동</button>
           </div>
           <div class="dms" id="clickDms"></div>
         </div>
@@ -695,7 +700,11 @@ $('gkey').addEventListener('keydown', (e)=>{ if(e.key === 'Enter') $('applyKey')
 
 $('gotoPhoto').addEventListener('click', ()=>{
   if(state.photo.lat === null) return;
+  // 사진을 올리면 위성지도가 이미 그 위치에 가 있어서, 눌러도 화면이 그대로일 때가
+  // 많다. 아무 일도 안 일어난 것처럼 보이지 않도록 핀을 다시 찍고 알림을 띄운다.
   satMap.focus(state.photo.lat, state.photo.lng, SAT_MAX_ZOOM);
+  satMap.setMarker(state.photo.lat, state.photo.lng, '사진 촬영 위치');
+  toast('사진 위치로 이동했습니다');
 });
 
 /* =========================================================
