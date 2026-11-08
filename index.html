@@ -399,15 +399,17 @@
             <div class="coord">
               <div class="body">
                 <label class="lbl" for="inLat">위도 (Latitude)</label>
+                <!-- 비어 있을 때는 위쪽 좌표 칸들과 똑같이 —로 보이게 한다.
+                     입력 예시는 카드 아래 안내 문구에 적어 두었다. -->
                 <input class="valin" id="inLat" type="text" inputmode="decimal"
-                       placeholder="37.690486" autocomplete="off" spellcheck="false">
+                       placeholder="—" autocomplete="off" spellcheck="false">
               </div>
             </div>
             <div class="coord">
               <div class="body">
                 <label class="lbl" for="inLng">경도 (Longitude)</label>
                 <input class="valin" id="inLng" type="text" inputmode="decimal"
-                       placeholder="126.518861" autocomplete="off" spellcheck="false">
+                       placeholder="—" autocomplete="off" spellcheck="false">
               </div>
             </div>
           </div>
