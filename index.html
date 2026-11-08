@@ -384,6 +384,10 @@ const state = {
   engine: null            // 'google' | 'leaflet'
 };
 
+// 위성지도의 최대 배율. Esri World Imagery는 전 세계 대부분에서 줌 19까지
+// 실제 영상을 제공하고, 그 이상은 '데이터 없음' 타일이 온다.
+const SAT_MAX_ZOOM = 19;
+
 const $ = (id) => document.getElementById(id);
 
 /* =========================================================
@@ -571,7 +575,7 @@ function makeLeafletMap(el, opts){
   });
   const sat = L.tileLayer(
     'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-      maxZoom: 19, attribution: 'Tiles &copy; Esri, Maxar, Earthstar Geographics'
+      maxZoom: SAT_MAX_ZOOM, attribution: 'Tiles &copy; Esri, Maxar, Earthstar Geographics'
     });
   if(opts.satellite){ sat.addTo(map); } else { osm.addTo(map); }
   L.control.layers({ '위성': sat, '일반지도': osm }, {}, { position:'topright' }).addTo(map);
@@ -635,8 +639,8 @@ function buildMaps(engine){
     badge.classList.remove('live');
   }
   $('satHint').textContent =
-    '위성 영상은 Esri World Imagery입니다. 국내도 최대 배율까지 확대됩니다. '
-    + '클릭한 지점의 위도·경도가 아래에 표시됩니다.';
+    '위성 영상은 Esri World Imagery입니다. 사진을 올리면 최대 배율(줌 '
+    + SAT_MAX_ZOOM + ')로 확대됩니다. 클릭한 지점의 위도·경도가 아래에 표시됩니다.';
 }
 
 function showPhotoOnMaps(lat, lng){
@@ -644,8 +648,10 @@ function showPhotoOnMaps(lat, lng){
   photoMap.setMarker(lat, lng, '사진 촬영 위치');
   photoMap.focus(lat, lng, 16);
   photoMap.resize();
+  // Esri World Imagery의 실제 영상은 줌 19까지. 그 이상은 '데이터 없음' 타일이라
+  // 레이어 maxZoom을 19로 묶어두고, 사진을 올리면 바로 19(최대 배율)로 당긴다.
   satMap.setMarker(lat, lng, '사진 촬영 위치');
-  satMap.focus(lat, lng, 18);
+  satMap.focus(lat, lng, SAT_MAX_ZOOM);
   satMap.resize();
 }
 
@@ -689,7 +695,7 @@ $('gkey').addEventListener('keydown', (e)=>{ if(e.key === 'Enter') $('applyKey')
 
 $('gotoPhoto').addEventListener('click', ()=>{
   if(state.photo.lat === null) return;
-  satMap.focus(state.photo.lat, state.photo.lng, 18);
+  satMap.focus(state.photo.lat, state.photo.lng, SAT_MAX_ZOOM);
 });
 
 /* =========================================================
