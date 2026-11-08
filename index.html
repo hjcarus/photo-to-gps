@@ -389,9 +389,13 @@ const state = {
   engine: null            // 'google' | 'leaflet'
 };
 
-// 위성지도의 최대 배율. Esri World Imagery는 전 세계 대부분에서 줌 19까지
-// 실제 영상을 제공하고, 그 이상은 '데이터 없음' 타일이 온다.
-const SAT_MAX_ZOOM = 19;
+// 위성지도 배율.
+// Esri World Imagery는 줌 19 영상이 없는 지역이 꽤 있어서, 19로 열면 'Map data
+// not yet available' 타일이 뜨는 사진이 많다. 그래서 여는 배율은 18로 두고,
+// 영상이 있는 곳에서는 한 단계 더 당겨볼 수 있도록 레이어 한계만 19로 남긴다.
+// (19까지 아예 막고 싶으면 SAT_MAX_ZOOM도 18로 바꾸면 된다.)
+const SAT_OPEN_ZOOM = 18;   // 사진을 올렸을 때 자동으로 맞춰지는 배율
+const SAT_MAX_ZOOM  = 19;   // 손으로 확대할 수 있는 최대 배율
 
 const $ = (id) => document.getElementById(id);
 
@@ -644,8 +648,8 @@ function buildMaps(engine){
     badge.classList.remove('live');
   }
   $('satHint').textContent =
-    '위성 영상은 Esri World Imagery입니다. 사진을 올리면 최대 배율(줌 '
-    + SAT_MAX_ZOOM + ')로 확대됩니다. 클릭한 지점의 위도·경도가 아래에 표시됩니다.';
+    '위성 영상은 Esri World Imagery입니다. 사진을 올리면 줌 '
+    + SAT_OPEN_ZOOM + '로 확대됩니다. 클릭한 지점의 위도·경도가 아래에 표시됩니다.';
 }
 
 function showPhotoOnMaps(lat, lng){
@@ -653,10 +657,8 @@ function showPhotoOnMaps(lat, lng){
   photoMap.setMarker(lat, lng, '사진 촬영 위치');
   photoMap.focus(lat, lng, 16);
   photoMap.resize();
-  // Esri World Imagery의 실제 영상은 줌 19까지. 그 이상은 '데이터 없음' 타일이라
-  // 레이어 maxZoom을 19로 묶어두고, 사진을 올리면 바로 19(최대 배율)로 당긴다.
   satMap.setMarker(lat, lng, '사진 촬영 위치');
-  satMap.focus(lat, lng, SAT_MAX_ZOOM);
+  satMap.focus(lat, lng, SAT_OPEN_ZOOM);
   satMap.resize();
 }
 
@@ -702,7 +704,7 @@ $('gotoPhoto').addEventListener('click', ()=>{
   if(state.photo.lat === null) return;
   // 사진을 올리면 위성지도가 이미 그 위치에 가 있어서, 눌러도 화면이 그대로일 때가
   // 많다. 아무 일도 안 일어난 것처럼 보이지 않도록 핀을 다시 찍고 알림을 띄운다.
-  satMap.focus(state.photo.lat, state.photo.lng, SAT_MAX_ZOOM);
+  satMap.focus(state.photo.lat, state.photo.lng, SAT_OPEN_ZOOM);
   satMap.setMarker(state.photo.lat, state.photo.lng, '사진 촬영 위치');
   // 핀이 사진 위치로 옮겨졌으므로 아래 좌표도 그 자리를 가리켜야 한다.
   setCoords('click', state.photo.lat, state.photo.lng);
