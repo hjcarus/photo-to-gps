@@ -989,10 +989,43 @@ window.addEventListener('drop', (e)=>{
   if(f) handleFile(f);
 });
 
-/* --- 붙여넣기(Ctrl+V) --- */
+/* --- 붙여넣기(Ctrl+V) ---
+   화면 어디서든 사진을 붙여넣을 수 있게 window에 걸어 뒀는데, 그대로 두면
+   좌표를 붙여넣을 때도 사진 업로드로 받아 버린다. 좌표를 복사한 클립보드에
+   글자와 함께 그림이 담겨 오는 경우가 있어, 엉뚱한 이미지가 올라가고
+   'GPS 정보가 없습니다' 안내까지 뜬다. 그래서 순서를 둔다.
+     1) 입력칸에 붙여넣는 중이면 손대지 않는다 (글자 붙여넣기 그대로)
+     2) 클립보드 글자가 좌표로 읽히면 좌표 입력으로 받는다
+     3) 그 밖에 이미지 파일이 있을 때만 사진으로 올린다                      */
+function coordsFromText(text){
+  const pair = splitPair(text);
+  if(!pair) return null;
+  const lat = parseCoord(pair[0]);
+  const lng = parseCoord(pair[1]);
+  if(lat === null || lng === null) return null;
+  if(Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return [lat, lng];
+}
+
 window.addEventListener('paste', (e)=>{
-  const items = e.clipboardData && e.clipboardData.files;
-  if(items && items.length) handleFile(items[0]);
+  const t = e.target;
+  if(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+
+  const cd = e.clipboardData;
+  if(!cd) return;
+
+  const text = (cd.getData('text/plain') || '').trim();
+  const c = text ? coordsFromText(text) : null;
+  if(c){
+    e.preventDefault();
+    $('inLat').value = String(c[0]);
+    $('inLng').value = String(c[1]);
+    applyTypedCoords();
+    return;
+  }
+
+  const files = cd.files;
+  if(files && files.length && /^image\//.test(files[0].type)) handleFile(files[0]);
 });
 
 /* =========================================================
